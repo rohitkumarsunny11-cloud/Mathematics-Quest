@@ -1,0 +1,6 @@
+{
+  "name": "Math Quest",
+  "description": "Math Quest: Brain Challenge - 100 handcrafted mathematics puzzles, math-cross mode, and daily challenges.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Math Quest</string>
+    <!-- Connected Google AdMob Application ID -->
+    <string name="admob_app_id">ca-app-pub-1765363605368624~2041980950</string>
+</resources>
