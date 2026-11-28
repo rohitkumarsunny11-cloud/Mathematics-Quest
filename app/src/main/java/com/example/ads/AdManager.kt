@@ -58,7 +58,8 @@ object AdManager {
     fun loadAndShowRewardedAd(
         activity: Activity,
         onRewardEarned: () -> Unit,
-        onAdFailed: (String) -> Unit
+        onAdFailed: (String) -> Unit,
+        onAdDismissed: ((Boolean) -> Unit)? = null
     ) {
         val adRequest = AdRequest.Builder().build()
         val adUnitId = AdConfig.getRewardedAdUnitId()
@@ -73,11 +74,17 @@ object AdManager {
                     rewardedAd.fullScreenContentCallback = object : FullScreenContentCallback() {
                         override fun onAdDismissedFullScreenContent() {
                             Log.d(TAG, "Rewarded ad dismissed. Reward granted status: ${rewardGranted.get()}")
+                            activity.runOnUiThread {
+                                onAdDismissed?.invoke(rewardGranted.get())
+                            }
                         }
 
                         override fun onAdFailedToShowFullScreenContent(adError: AdError) {
                             Log.e(TAG, "Rewarded ad failed to show: ${adError.message}")
-                            onAdFailed("Ad display failed: ${adError.message}")
+                            activity.runOnUiThread {
+                                onAdFailed("Ad display failed: ${adError.message}")
+                                onAdDismissed?.invoke(false)
+                            }
                         }
                     }
 
@@ -94,7 +101,10 @@ object AdManager {
 
                 override fun onAdFailedToLoad(loadAdError: LoadAdError) {
                     Log.e(TAG, "Rewarded ad failed to load: ${loadAdError.message}")
-                    onAdFailed("Ad failed to load: ${loadAdError.message}")
+                    activity.runOnUiThread {
+                        onAdFailed("Ad failed to load: ${loadAdError.message}")
+                        onAdDismissed?.invoke(false)
+                    }
                 }
             }
         )

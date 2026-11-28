@@ -58,6 +58,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.MathCrossData
+import com.example.data.MathCrossSolveResult
 import com.example.data.local.MathCrossProgressEntity
 import com.example.model.CrossCellType
 import com.example.model.Difficulty
@@ -84,7 +85,7 @@ fun MathCrossScreen(
     soundEnabled: Boolean,
     hapticsEnabled: Boolean,
     progressList: List<MathCrossProgressEntity>,
-    onSolveBoard: (boardId: Int, timeSec: Int, rewardCoins: Int) -> Unit,
+    onSolveBoard: (boardId: Int, timeSec: Int, rewardCoins: Int, onResult: (MathCrossSolveResult) -> Unit) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -98,16 +99,42 @@ fun MathCrossScreen(
         mutableStateOf(firstEditable?.let { Pair(it.row, it.col) })
     }
 
-    var isSolvedBoard by remember(selectedBoardId) { mutableStateOf(false) }
-    val context = LocalContext.current
+    val currentBoardProgress = progressList.find { it.boardId == board.id }
+    val isBoardRewardClaimed = currentBoardProgress?.rewardClaimed == true
 
+    var isSolvedBoard by remember(selectedBoardId, currentBoardProgress?.completed) {
+        mutableStateOf(currentBoardProgress?.completed == true)
+    }
+    var statusMessage by remember(selectedBoardId) { mutableStateOf<String?>(null) }
+    var isSubmitting by remember(selectedBoardId) { mutableStateOf(false) }
+
+    val context = LocalContext.current
     val solvedIds = progressList.filter { it.completed }.map { it.boardId }.toSet()
 
     val checkValidation = {
-        if (board.isSolved(userInputs)) {
-            isSolvedBoard = true
-            SoundAndHaptics.playCorrect(context, soundEnabled, hapticsEnabled)
-            onSolveBoard(board.id, 45, board.rewardCoins)
+        if (!isSubmitting) {
+            if (board.isSolved(userInputs)) {
+                isSolvedBoard = true
+                val alreadyClaimed = progressList.any { it.boardId == board.id && it.rewardClaimed }
+                if (alreadyClaimed) {
+                    SoundAndHaptics.playCorrect(context, soundEnabled, hapticsEnabled)
+                    statusMessage = "Reward already claimed!"
+                } else {
+                    isSubmitting = true
+                    SoundAndHaptics.playCorrect(context, soundEnabled, hapticsEnabled)
+                    onSolveBoard(board.id, 45, board.rewardCoins) { result ->
+                        isSubmitting = false
+                        when (result) {
+                            is MathCrossSolveResult.SuccessAwarded -> {
+                                statusMessage = "Grid Complete! +${result.coinsAwarded} coins claimed!"
+                            }
+                            is MathCrossSolveResult.AlreadyClaimed -> {
+                                statusMessage = "Reward already claimed!"
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -213,13 +240,42 @@ fun MathCrossScreen(
                                 color = Color(0xFF1E2433)
                             )
                         )
-                        Text(
-                            text = "Reward: +${board.rewardCoins} coins",
-                            style = MaterialTheme.typography.bodySmall.copy(
-                                color = AmberOrange,
-                                fontWeight = FontWeight.ExtraBold
+                        if (isBoardRewardClaimed) {
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = TurquoiseAccent.copy(alpha = 0.15f),
+                                modifier = Modifier.testTag("reward_claimed_badge")
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = null,
+                                        tint = TurquoiseAccent,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "Reward Claimed",
+                                        style = MaterialTheme.typography.bodySmall.copy(
+                                            color = TurquoiseAccent,
+                                            fontWeight = FontWeight.ExtraBold
+                                        )
+                                    )
+                                }
+                            }
+                        } else {
+                            Text(
+                                text = "Reward: +${board.rewardCoins} coins",
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    color = AmberOrange,
+                                    fontWeight = FontWeight.ExtraBold
+                                ),
+                                modifier = Modifier.testTag("reward_available_text")
                             )
-                        )
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(4.dp))
@@ -314,26 +370,74 @@ fun MathCrossScreen(
             }
 
 
-            // Solved notification banner
-            if (isSolvedBoard) {
+            // Status feedback message (e.g., "Reward already claimed!")
+            if (statusMessage != null) {
                 Spacer(modifier = Modifier.height(10.dp))
                 Surface(
                     shape = RoundedCornerShape(16.dp),
-                    color = TurquoiseAccent.copy(alpha = 0.15f),
-                    modifier = Modifier.fillMaxWidth()
+                    color = if (statusMessage == "Reward already claimed!") AmberOrange.copy(alpha = 0.15f) else TurquoiseAccent.copy(alpha = 0.15f),
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        if (statusMessage == "Reward already claimed!") AmberOrange else TurquoiseAccent
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("math_cross_status_message")
                 ) {
                     Row(
                         modifier = Modifier.padding(12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Center
                     ) {
-                        Icon(imageVector = Icons.Default.CheckCircle, contentDescription = null, tint = TurquoiseAccent)
+                        Icon(
+                            imageVector = if (statusMessage == "Reward already claimed!") Icons.Default.MonetizationOn else Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            tint = if (statusMessage == "Reward already claimed!") AmberOrange else TurquoiseAccent,
+                            modifier = Modifier.size(20.dp)
+                        )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Grid Complete! All rows and columns satisfied! +${board.rewardCoins} coins",
+                            text = statusMessage ?: "",
                             style = MaterialTheme.typography.bodyMedium.copy(
                                 fontWeight = FontWeight.Bold,
-                                color = TurquoiseAccent
+                                color = if (statusMessage == "Reward already claimed!") Color(0xFFB45309) else TurquoiseAccent
+                            )
+                        )
+                    }
+                }
+            }
+
+            // Solved notification banner
+            if (isSolvedBoard) {
+                Spacer(modifier = Modifier.height(10.dp))
+                val isClaimed = isBoardRewardClaimed || statusMessage == "Reward already claimed!"
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = if (isClaimed) Color(0xFFEDF2F9) else TurquoiseAccent.copy(alpha = 0.15f),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("math_cross_solved_banner")
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            tint = if (isClaimed) Color(0xFF4C7BF7) else TurquoiseAccent
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = if (isClaimed) {
+                                "Grid Solved! (Reward already claimed)"
+                            } else {
+                                "Grid Complete! All rows and columns satisfied! +${board.rewardCoins} coins"
+                            },
+                            style = MaterialTheme.typography.bodyMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = if (isClaimed) Color(0xFF1E2433) else TurquoiseAccent
                             )
                         )
                     }
@@ -371,7 +475,7 @@ fun MathCrossScreen(
                 }
             },
             onSubmit = { checkValidation() },
-            canSubmit = true,
+            canSubmit = !isSubmitting,
             soundEnabled = soundEnabled,
             hapticsEnabled = hapticsEnabled
         )

@@ -39,7 +39,8 @@ data class DailyProgressEntity(
 data class MathCrossProgressEntity(
     @PrimaryKey val boardId: Int,
     val completed: Boolean = false,
-    val bestTimeSeconds: Int = 0
+    val bestTimeSeconds: Int = 0,
+    val rewardClaimed: Boolean = false
 )
 
 @Entity(tableName = "achievements")

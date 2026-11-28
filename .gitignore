@@ -2,17 +2,25 @@
 .gradle
 .kotlin
 /local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
+local.properties
+/.idea
 .DS_Store
 /build
+/app/build
+/.build-outputs
 /captures
 .externalNativeBuild
 .cxx
-local.properties
+
+# Environment & Secrets
 .env
+.env.*
+!.env.example
+
+# Signing keystores & build artifacts
+*.jks
+*.keystore
+*.apk
+*.aab
 debug.keystore
+

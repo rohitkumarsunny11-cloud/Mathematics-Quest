@@ -179,9 +179,15 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun solveMathCross(boardId: Int, timeSec: Int, rewardCoins: Int) {
+    fun solveMathCross(
+        boardId: Int,
+        timeSec: Int,
+        rewardCoins: Int,
+        onResult: (com.example.data.MathCrossSolveResult) -> Unit = {}
+    ) {
         viewModelScope.launch {
-            repository.recordMathCrossSolved(boardId, timeSec, rewardCoins)
+            val result = repository.recordMathCrossSolved(boardId, timeSec, rewardCoins)
+            onResult(result)
         }
     }
 
@@ -203,8 +209,26 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    private val _removeAdsComingSoonMessage = MutableStateFlow<String?>(null)
+    val removeAdsComingSoonMessage: StateFlow<String?> = _removeAdsComingSoonMessage.asStateFlow()
+
+    fun showRemoveAdsComingSoon(activity: Activity? = null) {
+        val msg = "Coming Soon! Remove Ads feature will be available soon."
+        _removeAdsComingSoonMessage.value = msg
+        billingManager.setTemporaryMessage(msg)
+        activity?.let {
+            android.widget.Toast.makeText(it, msg, android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun dismissRemoveAdsComingSoon() {
+        _removeAdsComingSoonMessage.value = null
+    }
+
     fun launchRemoveAdsPurchase(activity: Activity) {
-        billingManager.launchPurchaseFlow(activity)
+        // Temporarily disabled Google Play Billing purchase flow as requested.
+        // BillingManager code is preserved for future Google Play Console integration.
+        showRemoveAdsComingSoon(activity)
     }
 
     fun restorePurchases(onResult: ((Boolean) -> Unit)? = null) {
@@ -229,7 +253,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     fun getHighestUnlockedLevel(): Int {
         val completed = levelProgressList.value.filter { it.completed }.map { it.levelId }
         val maxId = completed.maxOrNull() ?: 0
-        return (maxId + 1).coerceAtMost(100)
+        return maxId + 1
     }
 
     override fun onCleared() {

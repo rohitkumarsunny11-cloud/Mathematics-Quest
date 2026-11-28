@@ -64,6 +64,19 @@ import com.example.ui.theme.RibbonBlue
 import com.example.ui.theme.RibbonBlueDark
 import com.example.ui.theme.SkyBlueLight
 
+object HintPricing {
+    const val TIER_1_PRICE = 200
+    const val TIER_2_PRICE = 500
+    const val TIER_3_PRICE = 1000
+
+    fun getPriceForTier(tier: Int): Int = when (tier) {
+        1 -> TIER_1_PRICE
+        2 -> TIER_2_PRICE
+        3 -> TIER_3_PRICE
+        else -> 0
+    }
+}
+
 @Composable
 fun HintDialog(
     puzzle: LevelPuzzle,
@@ -224,41 +237,41 @@ fun HintDialog(
                     Spacer(modifier = Modifier.height(10.dp))
                 }
 
-                // Tier 1: Nudge (20 coins)
+                // Tier 1: Gentle Nudge (200 coins)
                 HintTierCard(
                     tier = 1,
                     title = "Gentle Nudge",
                     content = puzzle.hint1,
-                    cost = 20,
+                    cost = HintPricing.TIER_1_PRICE,
                     isUnlocked = unlockedTier >= 1,
-                    canAfford = userCoins >= 20,
-                    onUnlock = { onUnlockTier(1, 20) }
+                    canAfford = userCoins >= HintPricing.TIER_1_PRICE,
+                    onUnlock = { onUnlockTier(1, HintPricing.TIER_1_PRICE) }
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Tier 2: Step-by-Step (40 coins)
+                // Tier 2: Logical Step (500 coins)
                 HintTierCard(
                     tier = 2,
                     title = "Logical Step",
                     content = puzzle.hint2,
-                    cost = 40,
+                    cost = HintPricing.TIER_2_PRICE,
                     isUnlocked = unlockedTier >= 2,
-                    canAfford = userCoins >= 40,
-                    onUnlock = { onUnlockTier(2, 40) }
+                    canAfford = userCoins >= HintPricing.TIER_2_PRICE,
+                    onUnlock = { onUnlockTier(2, HintPricing.TIER_2_PRICE) }
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Tier 3: Solution (80 coins)
+                // Tier 3: Full Solution (1000 coins)
                 HintTierCard(
                     tier = 3,
                     title = "Full Solution",
                     content = puzzle.hint3,
-                    cost = 80,
+                    cost = HintPricing.TIER_3_PRICE,
                     isUnlocked = unlockedTier >= 3,
-                    canAfford = userCoins >= 80,
-                    onUnlock = { onUnlockTier(3, 80) }
+                    canAfford = userCoins >= HintPricing.TIER_3_PRICE,
+                    onUnlock = { onUnlockTier(3, HintPricing.TIER_3_PRICE) }
                 )
 
                 Spacer(modifier = Modifier.height(14.dp))

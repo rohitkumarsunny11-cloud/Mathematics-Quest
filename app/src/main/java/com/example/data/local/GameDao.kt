@@ -40,6 +40,9 @@ interface GameDao {
     @Query("SELECT * FROM math_cross_progress ORDER BY boardId ASC")
     fun getAllMathCrossProgress(): Flow<List<MathCrossProgressEntity>>
 
+    @Query("SELECT * FROM math_cross_progress WHERE boardId = :boardId")
+    suspend fun getMathCrossProgress(boardId: Int): MathCrossProgressEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertMathCrossProgress(progress: MathCrossProgressEntity)
 

@@ -2,10 +2,13 @@ package com.example.ui.screens
 
 import android.app.Activity
 import com.example.ads.AdManager
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.SolidColor
 import com.example.ui.theme.GlossyBlueBottom
 import com.example.ui.theme.GlossyBlueTop
 import com.example.ui.theme.SkyBlueDeeper
@@ -24,8 +27,15 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CheckCircle
@@ -42,6 +52,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -50,9 +61,19 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -310,14 +331,18 @@ fun DailyChallengeScreen(
                                     if (activity != null) {
                                         isBonusAdLoading = true
                                         bonusAdErrorMessage = null
-                                        AdManager.loadAndShowRewardedInterstitial(
+                                        AdManager.loadAndShowRewardedAd(
                                             activity = activity,
                                             onRewardEarned = {
                                                 isBonusAdLoading = false
                                                 bonusAdClaimed = true
                                                 onAwardBonusCoins(50)
                                             },
-                                            onDismissed = { earned ->
+                                            onAdFailed = { error ->
+                                                isBonusAdLoading = false
+                                                bonusAdErrorMessage = error
+                                            },
+                                            onAdDismissed = { earned ->
                                                 isBonusAdLoading = false
                                                 if (!earned && !bonusAdClaimed) {
                                                     bonusAdErrorMessage = "Reward not earned (ad skipped or cancelled)"
@@ -473,6 +498,7 @@ fun DailyChallengeScreen(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun DailyPuzzlePlayDialog(
     dailyPuzzle: DailyPuzzle,
@@ -482,10 +508,45 @@ private fun DailyPuzzlePlayDialog(
     onSolved: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    var input by remember { mutableStateOf("") }
+    var textFieldValue by remember { mutableStateOf(TextFieldValue("")) }
+    val input = textFieldValue.text
     var isError by remember { mutableStateOf(false) }
 
-    Dialog(onDismissRequest = onDismiss) {
+    val focusRequester = remember { FocusRequester() }
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val bringIntoViewRequester = remember { BringIntoViewRequester() }
+    var isInputFocused by remember { mutableStateOf(false) }
+
+    val needsTextKeyboard = remember(dailyPuzzle.puzzle) {
+        dailyPuzzle.puzzle.type == com.example.model.PuzzleType.OPERATOR ||
+            dailyPuzzle.puzzle.type == com.example.model.PuzzleType.CLOCK_MATH ||
+            dailyPuzzle.puzzle.acceptedAnswers.any { ans -> ans.any { !it.isDigit() } }
+    }
+    val keyboardType = if (needsTextKeyboard) KeyboardType.Text else KeyboardType.Number
+
+    LaunchedEffect(isInputFocused) {
+        if (isInputFocused) {
+            kotlinx.coroutines.delay(100L)
+            bringIntoViewRequester.bringIntoView()
+        }
+    }
+
+    val submitAnswer = {
+        if (dailyPuzzle.puzzle.isAnswerCorrect(input)) {
+            keyboardController?.hide()
+            focusManager.clearFocus()
+            onSolved()
+        } else {
+            isError = true
+        }
+    }
+
+    Dialog(onDismissRequest = {
+        keyboardController?.hide()
+        focusManager.clearFocus()
+        onDismiss()
+    }) {
         Card(
             shape = RoundedCornerShape(28.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -497,6 +558,7 @@ private fun DailyPuzzlePlayDialog(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
                     .padding(16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
@@ -528,14 +590,73 @@ private fun DailyPuzzlePlayDialog(
                     modifier = Modifier
                         .fillMaxWidth(0.6f)
                         .height(48.dp)
+                        .bringIntoViewRequester(bringIntoViewRequester)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null
+                        ) {
+                            focusRequester.requestFocus()
+                            keyboardController?.show()
+                        }
+                        .testTag("daily_answer_input_box")
                 ) {
                     Box(contentAlignment = Alignment.Center) {
-                        Text(
-                            text = if (input.isEmpty()) "Answer" else input,
-                            style = MaterialTheme.typography.titleLarge.copy(
+                        BasicTextField(
+                            value = textFieldValue,
+                            onValueChange = { newValue ->
+                                val sanitized = newValue.text.replace("\n", "")
+                                if (sanitized.length <= 8) {
+                                    textFieldValue = if (sanitized == newValue.text) {
+                                        newValue
+                                    } else {
+                                        newValue.copy(text = sanitized)
+                                    }
+                                    isError = false
+                                }
+                            },
+                            singleLine = true,
+                            textStyle = MaterialTheme.typography.titleLarge.copy(
                                 fontWeight = FontWeight.Bold,
-                                color = if (isError) CoralPink else PurplePrimary
-                            )
+                                color = if (isError) CoralPink else PurplePrimary,
+                                textAlign = TextAlign.Center
+                            ),
+                            cursorBrush = SolidColor(if (isError) CoralPink else PurplePrimary),
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = keyboardType,
+                                imeAction = ImeAction.Done
+                            ),
+                            keyboardActions = KeyboardActions(
+                                onDone = { submitAnswer() }
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp)
+                                .focusRequester(focusRequester)
+                                .onFocusChanged { focusState ->
+                                    isInputFocused = focusState.isFocused
+                                    if (focusState.isFocused) {
+                                        keyboardController?.show()
+                                    }
+                                }
+                                .testTag("daily_answer_input_field"),
+                            decorationBox = { innerTextField ->
+                                Box(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (input.isEmpty()) {
+                                        Text(
+                                            text = "Answer",
+                                            style = MaterialTheme.typography.titleLarge.copy(
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (isError) CoralPink else PurplePrimary,
+                                                textAlign = TextAlign.Center
+                                            )
+                                        )
+                                    }
+                                    innerTextField()
+                                }
+                            }
                         )
                     }
                 }
@@ -543,16 +664,21 @@ private fun DailyPuzzlePlayDialog(
                 Spacer(modifier = Modifier.height(10.dp))
 
                 MathKeypad(
-                    onDigitClick = { if (input.length < 8) input += it },
-                    onBackspace = { if (input.isNotEmpty()) input = input.dropLast(1) },
-                    onClear = { input = "" },
-                    onSubmit = {
-                        if (dailyPuzzle.puzzle.isAnswerCorrect(input)) {
-                            onSolved()
-                        } else {
-                            isError = true
+                    onDigitClick = { char ->
+                        val next = textFieldValue.text + char
+                        if (next.length <= 8) {
+                            textFieldValue = TextFieldValue(next, TextRange(next.length))
+                            isError = false
                         }
                     },
+                    onBackspace = {
+                        if (textFieldValue.text.isNotEmpty()) {
+                            val next = textFieldValue.text.dropLast(1)
+                            textFieldValue = TextFieldValue(next, TextRange(next.length))
+                        }
+                    },
+                    onClear = { textFieldValue = TextFieldValue("") },
+                    onSubmit = { submitAnswer() },
                     canSubmit = input.isNotEmpty(),
                     soundEnabled = soundEnabled,
                     hapticsEnabled = hapticsEnabled
@@ -561,7 +687,11 @@ private fun DailyPuzzlePlayDialog(
                 Spacer(modifier = Modifier.height(6.dp))
 
                 Button(
-                    onClick = onDismiss,
+                    onClick = {
+                        keyboardController?.hide()
+                        focusManager.clearFocus()
+                        onDismiss()
+                    },
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                     modifier = Modifier.fillMaxWidth()
                 ) {

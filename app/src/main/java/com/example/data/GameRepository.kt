@@ -9,8 +9,13 @@ import com.example.data.local.UserStatsEntity
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 class GameRepository(private val dao: GameDao) {
+
+    private val mathCrossMutex = Mutex()
+    private val hintDeductMutex = Mutex()
 
     val userStats: Flow<UserStatsEntity> = dao.getUserStats().map { it ?: UserStatsEntity() }
     val levelProgressList: Flow<List<LevelProgressEntity>> = dao.getAllLevelProgress()
@@ -38,7 +43,7 @@ class GameRepository(private val dao: GameDao) {
         val progress = dao.getAllLevelProgress().firstOrNull() ?: emptyList()
         val completedIds = progress.filter { it.completed }.map { it.levelId }
         val maxCompleted = completedIds.maxOrNull() ?: 0
-        return (maxCompleted + 1).coerceAtMost(LevelsRepository.TOTAL_LEVELS)
+        return maxCompleted + 1
     }
 
     suspend fun recordLevelCompletion(
@@ -102,15 +107,17 @@ class GameRepository(private val dao: GameDao) {
     }
 
     suspend fun deductCoinsForHint(cost: Int): Boolean {
-        val stats = dao.getUserStatsDirect() ?: UserStatsEntity()
-        if (stats.coins < cost) return false
-        dao.insertUserStats(
-            stats.copy(
-                coins = stats.coins - cost,
-                totalHintsUsed = stats.totalHintsUsed + 1
+        return hintDeductMutex.withLock {
+            val stats = dao.getUserStatsDirect() ?: UserStatsEntity()
+            if (stats.coins < cost) return@withLock false
+            dao.insertUserStats(
+                stats.copy(
+                    coins = stats.coins - cost,
+                    totalHintsUsed = stats.totalHintsUsed + 1
+                )
             )
-        )
-        return true
+            true
+        }
     }
 
     suspend fun recordWrongAnswer() {
@@ -155,24 +162,43 @@ class GameRepository(private val dao: GameDao) {
         checkDailyAchievements(newStreak)
     }
 
-    suspend fun recordMathCrossSolved(boardId: Int, timeSeconds: Int, rewardCoins: Int) {
-        dao.insertMathCrossProgress(
-            MathCrossProgressEntity(
-                boardId = boardId,
-                completed = true,
-                bestTimeSeconds = timeSeconds
-            )
-        )
+    suspend fun recordMathCrossSolved(boardId: Int, timeSeconds: Int, rewardCoins: Int): MathCrossSolveResult {
+        return mathCrossMutex.withLock {
+            val existing = dao.getMathCrossProgress(boardId)
+            val alreadyClaimed = existing?.rewardClaimed == true
 
-        val stats = dao.getUserStatsDirect() ?: UserStatsEntity()
-        dao.insertUserStats(
-            stats.copy(
-                coins = stats.coins + rewardCoins,
-                totalCorrectAnswers = stats.totalCorrectAnswers + 1
-            )
-        )
+            val bestTime = if (existing != null && existing.bestTimeSeconds > 0) {
+                minOf(existing.bestTimeSeconds, timeSeconds)
+            } else {
+                timeSeconds
+            }
 
-        checkCrossAchievements()
+            // Always update progress as completed with best time, marking rewardClaimed as true
+            dao.insertMathCrossProgress(
+                MathCrossProgressEntity(
+                    boardId = boardId,
+                    completed = true,
+                    bestTimeSeconds = bestTime,
+                    rewardClaimed = true
+                )
+            )
+
+            if (alreadyClaimed) {
+                // Do not award coins again if already claimed!
+                MathCrossSolveResult.AlreadyClaimed
+            } else {
+                // Award coins once on first claim
+                val stats = dao.getUserStatsDirect() ?: UserStatsEntity()
+                dao.insertUserStats(
+                    stats.copy(
+                        coins = stats.coins + rewardCoins,
+                        totalCorrectAnswers = stats.totalCorrectAnswers + 1
+                    )
+                )
+                checkCrossAchievements()
+                MathCrossSolveResult.SuccessAwarded(rewardCoins)
+            }
+        }
     }
 
     suspend fun toggleSound() {
@@ -274,3 +300,8 @@ data class LevelCompletionResult(
     val coinsAwarded: Int,
     val isFirstCompletion: Boolean
 )
+
+sealed class MathCrossSolveResult {
+    data class SuccessAwarded(val coinsAwarded: Int) : MathCrossSolveResult()
+    object AlreadyClaimed : MathCrossSolveResult()
+}

@@ -7,7 +7,13 @@ object LevelsRepository {
     val allLevels: List<LevelPuzzle> = levelsEasy + levelsNormal + levelsMedium + levelsHard + levelsExpert
 
     fun getLevel(id: Int): LevelPuzzle? {
-        return allLevels.find { it.id == id }
+        return if (id in 1..TOTAL_LEVELS) {
+            allLevels.find { it.id == id }
+        } else if (id > TOTAL_LEVELS) {
+            InfiniteLevelGenerator.generateLevel(id)
+        } else {
+            null
+        }
     }
 
     fun getLevelsByDifficulty(difficulty: Difficulty): List<LevelPuzzle> {
@@ -15,7 +21,7 @@ object LevelsRepository {
     }
 
     fun getNextLevelId(currentId: Int): Int? {
-        return if (currentId < allLevels.size) currentId + 1 else null
+        return currentId + 1
     }
 
     const val TOTAL_LEVELS = 100

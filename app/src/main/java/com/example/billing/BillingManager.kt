@@ -233,6 +233,10 @@ class BillingManager(
         }
     }
 
+    fun setTemporaryMessage(message: String) {
+        _purchaseStatusMessage.value = message
+    }
+
     fun clearStatusMessage() {
         _purchaseStatusMessage.value = null
     }

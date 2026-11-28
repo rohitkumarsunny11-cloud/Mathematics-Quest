@@ -17,6 +17,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.ui.GameViewModel
 import com.example.ui.Screen
@@ -62,8 +63,49 @@ fun GameAppContent(viewModel: GameViewModel) {
     val dailyProgressList by viewModel.dailyProgressList.collectAsStateWithLifecycle()
     val formattedRemoveAdsPrice by viewModel.formattedRemoveAdsPrice.collectAsStateWithLifecycle()
     val billingStatusMessage by viewModel.billingStatusMessage.collectAsStateWithLifecycle()
+    val removeAdsComingSoonMessage by viewModel.removeAdsComingSoonMessage.collectAsStateWithLifecycle()
 
     val highestUnlockedLevel = viewModel.getHighestUnlockedLevel()
+
+    if (removeAdsComingSoonMessage != null) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { viewModel.dismissRemoveAdsComingSoon() },
+            title = {
+                androidx.compose.material3.Text(
+                    text = "Coming Soon!",
+                    style = androidx.compose.material3.MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.ExtraBold,
+                        color = androidx.compose.ui.graphics.Color(0xFF1E2433)
+                    )
+                )
+            },
+            text = {
+                androidx.compose.material3.Text(
+                    text = "Remove Ads feature will be available soon.",
+                    style = androidx.compose.material3.MaterialTheme.typography.bodyMedium.copy(
+                        color = androidx.compose.ui.graphics.Color(0xFF5A6679)
+                    )
+                )
+            },
+            confirmButton = {
+                androidx.compose.material3.Button(
+                    onClick = { viewModel.dismissRemoveAdsComingSoon() },
+                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                        containerColor = com.example.ui.theme.GlossyBlueTop
+                    ),
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
+                ) {
+                    androidx.compose.material3.Text(
+                        "OK",
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                        color = androidx.compose.ui.graphics.Color.White
+                    )
+                }
+            },
+            shape = androidx.compose.foundation.shape.RoundedCornerShape(22.dp),
+            containerColor = androidx.compose.ui.graphics.Color.White
+        )
+    }
 
     BackHandler(enabled = currentScreen !is Screen.Home && currentScreen !is Screen.Splash) {
         viewModel.navigateBack()
@@ -158,8 +200,8 @@ fun GameAppContent(viewModel: GameViewModel) {
                     soundEnabled = userStats.soundEnabled,
                     hapticsEnabled = userStats.hapticsEnabled,
                     progressList = mathCrossProgressList,
-                    onSolveBoard = { boardId, time, reward ->
-                        viewModel.solveMathCross(boardId, time, reward)
+                    onSolveBoard = { boardId, time, reward, onResult ->
+                        viewModel.solveMathCross(boardId, time, reward, onResult)
                     },
                     onBack = { viewModel.navigateBack() }
                 )

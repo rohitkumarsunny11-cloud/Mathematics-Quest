@@ -84,23 +84,43 @@ fun LevelSelectScreen(
         Difficulty.EXPERT
     )
 
+    val tabTitles = listOf(
+        "Easy (1-20)",
+        "Normal (21-40)",
+        "Medium (41-60)",
+        "Hard (61-80)",
+        "Expert (81-100)",
+        "Infinite (101+)"
+    )
+
     // Determine initial tab based on highestUnlockedLevel
     val initialTab = when {
         highestUnlockedLevel <= 20 -> 0
         highestUnlockedLevel <= 40 -> 1
         highestUnlockedLevel <= 60 -> 2
         highestUnlockedLevel <= 80 -> 3
-        else -> 4
+        highestUnlockedLevel <= 100 -> 4
+        else -> 5
     }
 
     var selectedTabIndex by remember { mutableIntStateOf(initialTab) }
-    val currentDifficulty = difficulties[selectedTabIndex]
-    val levelsInDiff = LevelsRepository.getLevelsByDifficulty(currentDifficulty)
-
     val progressMap = levelProgressList.associateBy { it.levelId }
-    val diffCompletedCount = levelsInDiff.count { progressMap[it.id]?.completed == true }
-    val diffStarsCount = levelsInDiff.sumOf { progressMap[it.id]?.stars ?: 0 }
-    val totalStarsPossible = levelsInDiff.size * 3
+
+    val isInfiniteTab = selectedTabIndex == 5
+
+    val levelsToDisplay: List<Int> = if (!isInfiniteTab) {
+        val currentDifficulty = difficulties[selectedTabIndex]
+        LevelsRepository.getLevelsByDifficulty(currentDifficulty).map { it.id }
+    } else {
+        val maxInfiniteLevel = maxOf(120, if (highestUnlockedLevel > 100) ((highestUnlockedLevel - 101) / 20 + 1) * 20 + 100 else 120)
+        (101..maxInfiniteLevel).toList()
+    }
+
+    val diffStarsCount = if (!isInfiniteTab) {
+        levelsToDisplay.sumOf { progressMap[it]?.stars ?: 0 }
+    } else {
+        levelProgressList.filter { it.levelId >= 101 }.sumOf { it.stars }
+    }
 
     Box(
         modifier = modifier
@@ -206,7 +226,7 @@ fun LevelSelectScreen(
                         divider = {},
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        difficulties.forEachIndexed { index, diff ->
+                        tabTitles.forEachIndexed { index, title ->
                             val isSelected = selectedTabIndex == index
                             Tab(
                                 selected = isSelected,
@@ -219,7 +239,7 @@ fun LevelSelectScreen(
                                         modifier = Modifier.clip(RoundedCornerShape(14.dp))
                                     ) {
                                         Text(
-                                            text = "${diff.displayName} (${index * 20 + 1}-${index * 20 + 20})",
+                                            text = title,
                                             style = MaterialTheme.typography.labelMedium.copy(
                                                 fontWeight = FontWeight.ExtraBold,
                                                 color = if (isSelected) MagentaGradientBottom else Color.White
@@ -244,19 +264,19 @@ fun LevelSelectScreen(
                             .fillMaxSize()
                             .testTag("level_grid")
                     ) {
-                        items(levelsInDiff) { level ->
-                            val progress = progressMap[level.id]
+                        items(levelsToDisplay) { levelId ->
+                            val progress = progressMap[levelId]
                             val isCompleted = progress?.completed == true
                             val stars = progress?.stars ?: 0
-                            val isUnlocked = level.id <= highestUnlockedLevel
+                            val isUnlocked = levelId <= highestUnlockedLevel
 
                             LevelGridTile(
-                                levelNumber = level.id,
+                                levelNumber = levelId,
                                 isUnlocked = isUnlocked,
                                 isCompleted = isCompleted,
                                 stars = stars,
                                 onClick = {
-                                    if (isUnlocked) onSelectLevel(level.id)
+                                    if (isUnlocked) onSelectLevel(levelId)
                                 }
                             )
                         }

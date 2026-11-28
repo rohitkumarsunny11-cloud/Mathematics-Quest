@@ -322,7 +322,11 @@ fun HomeScreen(
                                 }
                                 Spacer(modifier = Modifier.height(6.dp))
                                 Text(
-                                    text = "Level $highestUnlockedLevel of 100",
+                                    text = if (highestUnlockedLevel <= 100) {
+                                        "Level $highestUnlockedLevel of 100"
+                                    } else {
+                                        "Level $highestUnlockedLevel • Infinite Mode"
+                                    },
                                     style = MaterialTheme.typography.titleLarge.copy(
                                         color = Color(0xFF1E2433),
                                         fontWeight = FontWeight.ExtraBold,
